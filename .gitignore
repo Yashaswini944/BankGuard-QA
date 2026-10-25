@@ -6,11 +6,11 @@
 # Test results
 **/TestResults/
 
-# IDE settings
+# Visual Studio and VS Code
 .vs/
 .vscode/
 
-# Local user files
+# User-specific files
 *.user
 *.suo
 
