@@ -1,0 +1,89 @@
+
+name: BankGuard API Automation Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  api-tests:
+    name: Build and Run NUnit API Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore dependencies
+        run: dotnet restore BankGuardQA.slnx
+
+      - name: Build solution
+        run: dotnet build BankGuardQA.slnx --configuration Release --no-restore
+
+      - name: Start API and run automated tests
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          dotnet run \
+            --project src/BankGuard.Api/BankGuard.Api.csproj \
+            --configuration Release \
+            --no-build \
+            --no-launch-profile \
+            -- --urls http://127.0.0.1:5105 \
+            > bankguard-api.log 2>&1 &
+
+          api_pid=$!
+          trap 'kill "$api_pid" 2>/dev/null || true' EXIT
+
+          echo "Checking API readiness..."
+
+          ready=false
+
+          for attempt in {1..30}; do
+            status=$(curl --silent \
+              --output /dev/null \
+              --write-out '%{http_code}' \
+              http://127.0.0.1:5105/api/accounts/00000000-0000-0000-0000-000000000001 \
+              || true)
+
+            if [[ "$status" == "404" ]]; then
+              ready=true
+              break
+            fi
+
+            sleep 1
+          done
+
+          if [[ "$ready" != "true" ]]; then
+            echo "API failed to start."
+            cat bankguard-api.log
+            exit 1
+          fi
+
+          echo "API is ready. Running NUnit tests..."
+
+          BANKGUARD_API_BASE_URL=http://127.0.0.1:5105 \
+          dotnet test \
+            tests/BankGuard.ApiTests/BankGuard.ApiTests.csproj \
+            --configuration Release \
+            --no-build \
+            --logger "trx;LogFileName=BankGuard-Results.trx"
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bankguard-test-results
+          path: |
+            **/TestResults/**/*.trx
+            bankguard-api.log
+          if-no-files-found: warn

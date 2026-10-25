@@ -1,0 +1,22 @@
+
+# .NET build files
+**/bin/
+**/obj/
+
+# Test results
+**/TestResults/
+
+# IDE settings
+.vs/
+.vscode/
+
+# Local user files
+*.user
+*.suo
+
+# Logs
+*.log
+
+# Environment secrets
+.env
+.env.*
