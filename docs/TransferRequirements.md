@@ -121,6 +121,12 @@ and maintain consistent database balances.
 The transfer endpoint will use an Idempotency-Key
 HTTP header.
 
+**Implementation Note:** The account creation and retrieval
+endpoints are implemented and tested. The transfer creation
+and transaction retrieval endpoints are planned for Phase 7
+and are not yet available.
+
+
 ## 5. Sample Transfer Request
 
 POST /api/transfers
@@ -270,13 +276,55 @@ Then:
 - GitHub Actions
 - Git
 
+
 ## 9. Current Implementation Status
 
-The initial account API and 12 automated tests
-are completed and passing in GitHub Actions.
+### Completed — Phase 6
 
-Banking transfers, SQL Server persistence,
-concurrency testing, and database rollback
-validation are planned for this phase.
+The following components have been implemented and verified:
 
-These requirements are not yet implemented.
+- ASP.NET Core Web API for bank account management.
+- Account creation and retrieval endpoints.
+- SQL Server database integration using Entity Framework Core.
+- BankAccount and BankTransaction database models.
+- BankGuardDbContext and EF Core database migrations.
+- Persistent account storage in SQL Server.
+- Input validation for account creation.
+- 12 automated API tests using NUnit and RestSharp.
+- Functional, negative, data-driven, and boundary-value testing.
+- GitHub Actions CI/CD pipeline.
+- Automated SQL Server setup and database migrations in GitHub Actions.
+- All 12 automated API tests passing in CI.
+- TRX test report generation and artifact upload.
+
+### Planned — Phase 7
+
+The following functionality is defined in this document but has not yet been implemented:
+
+- Account-to-account money transfers.
+- POST /api/transfers endpoint.
+- GET /api/transfers/{id} endpoint.
+- Atomic database transaction handling.
+- Insufficient-funds validation.
+- Invalid transfer amount validation.
+- Same-account transfer prevention.
+- Duplicate transfer prevention using idempotency keys.
+- Concurrent transaction handling.
+- Database rollback testing.
+- Transaction history verification.
+- Automated database-level assertions.
+
+### Current Testing Limitations
+
+- The existing automated tests cover account creation, retrieval, and input validation.
+- Automated tests do not yet cover banking transfers.
+- The Transfers database table exists, but the transfer API and business logic are not yet implemented.
+- Direct SQL Server database assertions are not yet part of the automated test suite.
+- Authentication and authorization are not yet implemented for banking operations.
+- The application uses fictional accounts and test data only.
+
+### Phase 7 Objective
+
+Implement a reliable simulated banking transfer workflow and develop automated tests that verify transactional consistency, failure handling, duplicate-request prevention, and concurrency behavior.
+
+All new functionality must preserve the existing 12 passing regression tests.
