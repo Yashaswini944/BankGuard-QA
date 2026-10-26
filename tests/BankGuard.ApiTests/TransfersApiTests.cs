@@ -16,9 +16,9 @@ public class TransfersApiTests
     private static readonly JsonSerializerOptions JsonOptions =
         new(JsonSerializerDefaults.Web);
 
-    // ============================================
+    // =====================================================
     // TEST SETUP AND CLEANUP
-    // ============================================
+    // =====================================================
 
     [OneTimeSetUp]
     public void Setup()
@@ -37,9 +37,9 @@ public class TransfersApiTests
         _client.Dispose();
     }
 
-    // ============================================
+    // =====================================================
     // TC-013: SUCCESSFUL BANKING TRANSFER
-    // ============================================
+    // =====================================================
 
     [Test]
     public async Task Transfer_ValidRequest_Returns201AndUpdatesBalances()
@@ -78,16 +78,15 @@ public class TransfersApiTests
             Assert.That(sourceAfter.Balance, Is.EqualTo(750m));
             Assert.That(destinationAfter.Balance, Is.EqualTo(750m));
 
-            // Total funds must be preserved.
             Assert.That(
                 sourceAfter.Balance + destinationAfter.Balance,
                 Is.EqualTo(1500m));
         });
     }
 
-    // ============================================
+    // =====================================================
     // TC-014: INSUFFICIENT FUNDS
-    // ============================================
+    // =====================================================
 
     [Test]
     public async Task Transfer_InsufficientFunds_Returns400()
@@ -109,7 +108,6 @@ public class TransfersApiTests
         var sourceAfter = await GetAccountAsync(source.Id);
         var destinationAfter = await GetAccountAsync(destination.Id);
 
-        // No balances should change after rejection.
         Assert.Multiple(() =>
         {
             Assert.That(sourceAfter.Balance, Is.EqualTo(100m));
@@ -117,9 +115,9 @@ public class TransfersApiTests
         });
     }
 
-    // ============================================
+    // =====================================================
     // TC-015: NEGATIVE TRANSFER AMOUNT
-    // ============================================
+    // =====================================================
 
     [Test]
     public async Task Transfer_NegativeAmount_Returns400()
@@ -139,9 +137,9 @@ public class TransfersApiTests
             $"Response: {response.Content}");
     }
 
-    // ============================================
+    // =====================================================
     // TC-016: ZERO TRANSFER AMOUNT
-    // ============================================
+    // =====================================================
 
     [Test]
     public async Task Transfer_ZeroAmount_Returns400()
@@ -161,9 +159,9 @@ public class TransfersApiTests
             $"Response: {response.Content}");
     }
 
-    // ============================================
+    // =====================================================
     // TC-017: SAME SOURCE AND DESTINATION
-    // ============================================
+    // =====================================================
 
     [Test]
     public async Task Transfer_SameAccount_Returns400()
@@ -182,9 +180,9 @@ public class TransfersApiTests
             $"Response: {response.Content}");
     }
 
-    // ============================================
+    // =====================================================
     // TC-018: SOURCE ACCOUNT NOT FOUND
-    // ============================================
+    // =====================================================
 
     [Test]
     public async Task Transfer_SourceAccountNotFound_Returns404()
@@ -203,9 +201,9 @@ public class TransfersApiTests
             $"Response: {response.Content}");
     }
 
-    // ============================================
+    // =====================================================
     // TC-019: DESTINATION ACCOUNT NOT FOUND
-    // ============================================
+    // =====================================================
 
     [Test]
     public async Task Transfer_DestinationAccountNotFound_Returns404()
@@ -224,9 +222,9 @@ public class TransfersApiTests
             $"Response: {response.Content}");
     }
 
-    // ============================================
+    // =====================================================
     // TC-020: DUPLICATE TRANSFER PREVENTION
-    // ============================================
+    // =====================================================
 
     [Test]
     public async Task Transfer_RepeatedRequest_DoesNotTransferTwice()
@@ -248,7 +246,6 @@ public class TransfersApiTests
 
         var firstTransfer = Deserialize<TransferDto>(firstResponse);
 
-        // Repeat exactly the same transfer.
         var secondResponse = await PostTransferAsync(
             source.Id,
             destination.Id,
@@ -267,20 +264,18 @@ public class TransfersApiTests
 
         Assert.Multiple(() =>
         {
-            // Both responses must identify the same transaction.
             Assert.That(
                 secondTransfer.Id,
                 Is.EqualTo(firstTransfer.Id));
 
-            // Money must move only once.
             Assert.That(sourceAfter.Balance, Is.EqualTo(750m));
             Assert.That(destinationAfter.Balance, Is.EqualTo(750m));
         });
     }
 
-    // ============================================
+    // =====================================================
     // TC-021: IDEMPOTENCY KEY CONFLICT
-    // ============================================
+    // =====================================================
 
     [Test]
     public async Task Transfer_SameKeyDifferentAmount_Returns409()
@@ -300,7 +295,6 @@ public class TransfersApiTests
             firstResponse.StatusCode,
             Is.EqualTo(HttpStatusCode.Created));
 
-        // Same key, different transfer amount.
         var secondResponse = await PostTransferAsync(
             source.Id,
             destination.Id,
@@ -322,9 +316,9 @@ public class TransfersApiTests
         });
     }
 
-    // ============================================
+    // =====================================================
     // TC-022: RETRIEVE COMPLETED TRANSFER
-    // ============================================
+    // =====================================================
 
     [Test]
     public async Task GetTransfer_ExistingId_Returns200()
@@ -377,9 +371,302 @@ public class TransfersApiTests
         });
     }
 
-    // ============================================
-    // REUSABLE HELPER: CREATE TEST ACCOUNT
-    // ============================================
+    // =====================================================
+    // TC-023: CONCURRENT WITHDRAWAL PROTECTION
+    // =====================================================
+
+    [Test]
+    public async Task Transfer_ConcurrentWithdrawals_PreventsOverspending()
+    {
+        // Source has enough money for only one transfer.
+        var source = await CreateTestAccountAsync(100m);
+        var destinationA = await CreateTestAccountAsync(0m);
+        var destinationB = await CreateTestAccountAsync(0m);
+
+        // Start two requests without waiting between them.
+        var firstTask = PostTransferAsync(
+            source.Id,
+            destinationA.Id,
+            80m,
+            Guid.NewGuid().ToString("N"));
+
+        var secondTask = PostTransferAsync(
+            source.Id,
+            destinationB.Id,
+            80m,
+            Guid.NewGuid().ToString("N"));
+
+        var responses = await Task.WhenAll(
+            firstTask,
+            secondTask);
+
+        // Retrieve final account balances.
+        var sourceAfter = await GetAccountAsync(source.Id);
+
+        var destinationAAfter =
+            await GetAccountAsync(destinationA.Id);
+
+        var destinationBAfter =
+            await GetAccountAsync(destinationB.Id);
+
+        int successfulTransfers = 0;
+        int rejectedTransfers = 0;
+
+        foreach (var response in responses)
+        {
+            if (response.StatusCode == HttpStatusCode.Created)
+            {
+                successfulTransfers++;
+            }
+
+            if (response.StatusCode == HttpStatusCode.BadRequest)
+            {
+                rejectedTransfers++;
+            }
+        }
+
+        string responseDetails =
+            $"Responses: {responses[0].StatusCode} " +
+            $"({responses[0].Content}), " +
+            $"{responses[1].StatusCode} " +
+            $"({responses[1].Content})";
+
+        // =================================================
+        // DIAGNOSTIC LOGGING
+        // =================================================
+
+        TestContext.Progress.WriteLine(
+            "========== CONCURRENCY TEST DIAGNOSTICS ==========");
+
+        TestContext.Progress.WriteLine(
+            $"Request A: HTTP {(int)responses[0].StatusCode} " +
+            $"({responses[0].StatusCode})");
+
+        TestContext.Progress.WriteLine(
+            $"Request A body: {responses[0].Content}");
+
+        TestContext.Progress.WriteLine(
+            $"Request A error: {responses[0].ErrorMessage}");
+
+        TestContext.Progress.WriteLine(
+            $"Request B: HTTP {(int)responses[1].StatusCode} " +
+            $"({responses[1].StatusCode})");
+
+        TestContext.Progress.WriteLine(
+            $"Request B body: {responses[1].Content}");
+
+        TestContext.Progress.WriteLine(
+            $"Request B error: {responses[1].ErrorMessage}");
+
+        TestContext.Progress.WriteLine(
+            $"Successful transfers: {successfulTransfers}");
+
+        TestContext.Progress.WriteLine(
+            $"Rejected transfers: {rejectedTransfers}");
+
+        TestContext.Progress.WriteLine(
+            $"Final balances: " +
+            $"Source={sourceAfter.Balance}, " +
+            $"DestinationA={destinationAAfter.Balance}, " +
+            $"DestinationB={destinationBAfter.Balance}");
+
+        TestContext.Progress.WriteLine(
+            "==================================================");
+
+        // =================================================
+        // CONCURRENCY ASSERTIONS
+        // =================================================
+
+        Assert.Multiple(() =>
+        {
+            // Exactly one request should succeed.
+            Assert.That(
+                successfulTransfers,
+                Is.EqualTo(1),
+                responseDetails);
+
+            // The second request should be rejected gracefully.
+            Assert.That(
+                rejectedTransfers,
+                Is.EqualTo(1),
+                responseDetails);
+
+            // Source must not be overdrawn.
+            Assert.That(
+                sourceAfter.Balance,
+                Is.EqualTo(20m));
+
+            // Only $80 may reach the destination accounts.
+            Assert.That(
+                destinationAAfter.Balance +
+                destinationBAfter.Balance,
+                Is.EqualTo(80m));
+
+            // Total funds must remain unchanged.
+            Assert.That(
+                sourceAfter.Balance +
+                destinationAAfter.Balance +
+                destinationBAfter.Balance,
+                Is.EqualTo(100m));
+        });
+    }
+
+    
+    // =====================================================
+    // TC-024: CONCURRENT DUPLICATE TRANSFER PROTECTION
+    // =====================================================
+
+    [Test]
+    public async Task Transfer_ConcurrentSameIdempotencyKey_ProcessesOnlyOnce()
+    {
+        // Create two fictional accounts.
+        var source = await CreateTestAccountAsync(1000m);
+        var destination = await CreateTestAccountAsync(100m);
+
+        // Both requests intentionally use the SAME key.
+        string sharedKey = Guid.NewGuid().ToString("N");
+
+        // Start both HTTP requests without waiting between them.
+        var firstTask = PostTransferAsync(
+            source.Id,
+            destination.Id,
+            250m,
+            sharedKey);
+
+        var secondTask = PostTransferAsync(
+            source.Id,
+            destination.Id,
+            250m,
+            sharedKey);
+
+        var responses = await Task.WhenAll(
+            firstTask,
+            secondTask);
+
+        // =============================================
+        // DIAGNOSTIC OUTPUT
+        // =============================================
+
+        TestContext.Progress.WriteLine(
+            "========== CONCURRENT IDEMPOTENCY TEST ==========");
+
+        TestContext.Progress.WriteLine(
+            $"Request A: HTTP {(int)responses[0].StatusCode} " +
+            $"({responses[0].StatusCode})");
+
+        TestContext.Progress.WriteLine(
+            $"Request A body: {responses[0].Content}");
+
+        TestContext.Progress.WriteLine(
+            $"Request A error: {responses[0].ErrorMessage}");
+
+        TestContext.Progress.WriteLine(
+            $"Request B: HTTP {(int)responses[1].StatusCode} " +
+            $"({responses[1].StatusCode})");
+
+        TestContext.Progress.WriteLine(
+            $"Request B body: {responses[1].Content}");
+
+        TestContext.Progress.WriteLine(
+            $"Request B error: {responses[1].ErrorMessage}");
+
+        // =============================================
+        // VERIFY HTTP RESPONSES
+        // =============================================
+
+        int createdCount = 0;
+        int replayCount = 0;
+
+        foreach (var response in responses)
+        {
+            if (response.StatusCode == HttpStatusCode.Created)
+            {
+                createdCount++;
+            }
+
+            if (response.StatusCode == HttpStatusCode.OK)
+            {
+                replayCount++;
+            }
+        }
+
+        string responseDetails =
+            $"A: {responses[0].StatusCode} " +
+            $"({responses[0].Content}); " +
+            $"B: {responses[1].StatusCode} " +
+            $"({responses[1].Content})";
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(
+                createdCount,
+                Is.EqualTo(1),
+                responseDetails);
+
+            Assert.That(
+                replayCount,
+                Is.EqualTo(1),
+                responseDetails);
+        });
+
+        // =============================================
+        // VERIFY SAME TRANSFER RECORD
+        // =============================================
+
+        var firstTransfer =
+            Deserialize<TransferDto>(responses[0]);
+
+        var secondTransfer =
+            Deserialize<TransferDto>(responses[1]);
+
+        Assert.That(
+            firstTransfer.Id,
+            Is.Not.EqualTo(Guid.Empty));
+
+        Assert.That(
+            secondTransfer.Id,
+            Is.EqualTo(firstTransfer.Id),
+            "Duplicate requests must return the same transfer ID.");
+
+        // =============================================
+        // VERIFY MONEY MOVED ONLY ONCE
+        // =============================================
+
+        var sourceAfter =
+            await GetAccountAsync(source.Id);
+
+        var destinationAfter =
+            await GetAccountAsync(destination.Id);
+
+        TestContext.Progress.WriteLine(
+            $"Final balances: Source={sourceAfter.Balance}, " +
+            $"Destination={destinationAfter.Balance}");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(
+                sourceAfter.Balance,
+                Is.EqualTo(750m),
+                "Source was debited more than once.");
+
+            Assert.That(
+                destinationAfter.Balance,
+                Is.EqualTo(350m),
+                "Destination was credited more than once.");
+
+            Assert.That(
+                sourceAfter.Balance + destinationAfter.Balance,
+                Is.EqualTo(1100m),
+                "Total funds must remain unchanged.");
+        });
+
+        TestContext.Progress.WriteLine(
+            "===============================================");
+    }
+
+    // =====================================================
+    // HELPER: CREATE TEST ACCOUNT
+    // =====================================================
 
     private async Task<AccountDto> CreateTestAccountAsync(
         decimal initialBalance)
@@ -407,9 +694,9 @@ public class TransfersApiTests
         return Deserialize<AccountDto>(response);
     }
 
-    // ============================================
-    // REUSABLE HELPER: GET ACCOUNT BALANCE
-    // ============================================
+    // =====================================================
+    // HELPER: RETRIEVE ACCOUNT
+    // =====================================================
 
     private async Task<AccountDto> GetAccountAsync(Guid accountId)
     {
@@ -427,9 +714,9 @@ public class TransfersApiTests
         return Deserialize<AccountDto>(response);
     }
 
-    // ============================================
-    // REUSABLE HELPER: POST TRANSFER
-    // ============================================
+    // =====================================================
+    // HELPER: POST BANKING TRANSFER
+    // =====================================================
 
     private async Task<RestResponse> PostTransferAsync(
         Guid fromAccountId,
@@ -452,9 +739,9 @@ public class TransfersApiTests
         return await _client.ExecuteAsync(request);
     }
 
-    // ============================================
-    // REUSABLE HELPER: PARSE JSON RESPONSE
-    // ============================================
+    // =====================================================
+    // HELPER: DESERIALIZE JSON RESPONSE
+    // =====================================================
 
     private static T Deserialize<T>(RestResponse response)
         where T : class
@@ -472,9 +759,9 @@ public class TransfersApiTests
         return result!;
     }
 
-    // ============================================
+    // =====================================================
     // RESPONSE DATA MODELS
-    // ============================================
+    // =====================================================
 
     private record AccountDto(
         Guid Id,
