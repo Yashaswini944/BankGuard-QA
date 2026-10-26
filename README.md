@@ -340,5 +340,6 @@ BankGuard QA demonstrates the ability to create and maintain an API testing fram
 
 ## Author
 
-**Yashaswini Halepalya Ravikumar**  
+**Yashaswini Halepalya Ravikumar**
+
 [GitHub: Yashaswini944](https://github.com/Yashaswini944)
