@@ -1,6 +1,8 @@
 
-using System.Collections.Concurrent;
+using BankGuard.Api.Data;
+using BankGuard.Api.Models;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace BankGuard.Api.Controllers;
 
@@ -8,45 +10,112 @@ namespace BankGuard.Api.Controllers;
 [Route("api/accounts")]
 public class AccountsController : ControllerBase
 {
-    // Temporary in-memory storage for development.
-    private static readonly ConcurrentDictionary<Guid, BankAccountDto>
-        Accounts = new();
+    private readonly BankGuardDbContext _context;
 
+    // Inject database context
+    public AccountsController(BankGuardDbContext context)
+    {
+        _context = context;
+    }
+
+    // ============================================
     // POST: api/accounts
+    // Create a new bank account in SQL Server
+    // ============================================
+
     [HttpPost]
-    public ActionResult<BankAccountDto> CreateAccount(
+    public async Task<ActionResult<BankAccountDto>> CreateAccount(
         [FromBody] CreateAccountRequest request)
     {
-        if (string.IsNullOrWhiteSpace(request.OwnerName) ||
-            request.OwnerName.Trim().Length > 100 ||
-            request.InitialBalance < 0)
+        // Validate account owner
+        if (string.IsNullOrWhiteSpace(request.OwnerName))
         {
             return BadRequest(new
             {
-                message = "Invalid account information."
+                message = "Account owner name is required."
             });
         }
 
-        var account = new BankAccountDto(
-            Guid.NewGuid(),
-            request.OwnerName.Trim(),
-            request.InitialBalance
-        );
+        string ownerName = request.OwnerName.Trim();
 
-        Accounts[account.Id] = account;
+        if (ownerName.Length > 100)
+        {
+            return BadRequest(new
+            {
+                message = "Owner name cannot exceed 100 characters."
+            });
+        }
+
+        // Validate initial balance
+        if (request.InitialBalance < 0)
+        {
+            return BadRequest(new
+            {
+                message = "Initial balance cannot be negative."
+            });
+        }
+
+        // Allow at most two decimal places
+        if (decimal.Round(request.InitialBalance, 2)
+            != request.InitialBalance)
+        {
+            return BadRequest(new
+            {
+                message = "Balance cannot have more than two decimal places."
+            });
+        }
+
+        // Match SQL Server decimal(18,2) range
+        if (request.InitialBalance > 9999999999999999.99m)
+        {
+            return BadRequest(new
+            {
+                message = "Initial balance exceeds the supported limit."
+            });
+        }
+
+        // Create database entity
+        var account = new BankAccount
+        {
+            Id = Guid.NewGuid(),
+            OwnerName = ownerName,
+            Balance = request.InitialBalance,
+            CreatedAtUtc = DateTime.UtcNow
+        };
+
+        // Store account in SQL Server
+        _context.Accounts.Add(account);
+
+        await _context.SaveChangesAsync();
+
+        // Convert entity to API response model
+        var result = new BankAccountDto(
+            account.Id,
+            account.OwnerName,
+            account.Balance
+        );
 
         return CreatedAtAction(
             nameof(GetAccount),
             new { id = account.Id },
-            account
+            result
         );
     }
 
+    // ============================================
     // GET: api/accounts/{id}
+    // Retrieve account from SQL Server
+    // ============================================
+
     [HttpGet("{id:guid}")]
-    public ActionResult<BankAccountDto> GetAccount(Guid id)
+    public async Task<ActionResult<BankAccountDto>> GetAccount(
+        Guid id)
     {
-        if (!Accounts.TryGetValue(id, out var account))
+        var account = await _context.Accounts
+            .AsNoTracking()
+            .FirstOrDefaultAsync(a => a.Id == id);
+
+        if (account == null)
         {
             return NotFound(new
             {
@@ -54,14 +123,28 @@ public class AccountsController : ControllerBase
             });
         }
 
-        return Ok(account);
+        var result = new BankAccountDto(
+            account.Id,
+            account.OwnerName,
+            account.Balance
+        );
+
+        return Ok(result);
     }
 }
 
+// ============================================
+// REQUEST MODEL
+// ============================================
+
 public record CreateAccountRequest(
-    string OwnerName,
+    string? OwnerName,
     decimal InitialBalance
 );
+
+// ============================================
+// RESPONSE MODEL
+// ============================================
 
 public record BankAccountDto(
     Guid Id,
