@@ -1,4 +1,17 @@
+using BankGuard.Api.Data;
+using Microsoft.EntityFrameworkCore;
+
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddDbContext<BankGuardDbContext>(options =>
+{
+    string connectionString =
+        builder.Configuration.GetConnectionString("BankGuardDb")
+        ?? throw new InvalidOperationException(
+            "BankGuardDb connection string is not configured.");
+
+    options.UseSqlServer(connectionString);
+});
 
 // Add services to the container.
 
