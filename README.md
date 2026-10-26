@@ -1,126 +1,119 @@
 
 # BankGuard QA
 
-### Automated Banking API Testing Framework
+**Automated Banking API Testing Framework**
 
-**C# | .NET 10 | NUnit | RestSharp | ASP.NET Core Web API | Entity Framework Core | SQL Server | GitHub Actions**
+**C# · .NET 10 · NUnit · RestSharp · ASP.NET Core Web API · Entity Framework Core · SQL Server · GitHub Actions**
 
-## Project Overview
+[GitHub Repository](https://github.com/Yashaswini944/BankGuard-QA) · [CI Workflows](https://github.com/Yashaswini944/BankGuard-QA/actions) · [Test Plan](docs/TestPlan.md) · [Transfer Requirements](docs/TransferRequirements.md)
 
-BankGuard QA is an API automation testing portfolio project built to demonstrate software quality engineering practices using a simulated banking application.
+## Overview
 
-The project combines a C# ASP.NET Core Web API with an automated NUnit and RestSharp regression testing framework.
+BankGuard QA is a software testing portfolio project built around a **simulated banking REST API**. Its purpose is to demonstrate test automation design, API validation, boundary-value analysis, data-driven tests, database-backed integration, and repeatable continuous integration.
 
-It focuses on functional testing, negative testing, boundary-value analysis, API response validation, database persistence, and continuous integration.
+The repository includes two separate .NET projects:
 
-All accounts and data are fictional. The application is designed for development and testing, not real financial transactions.
+- **BankGuard.Api** — the system under test (SUT), an ASP.NET Core Web API backed by SQL Server and Entity Framework Core.
+- **BankGuard.ApiTests** — an NUnit and RestSharp automation suite that calls the API over HTTP and checks its behavior.
 
-## Current Project Status
+All account names, balances, and transactions are fictional. **This is a learning and testing application, not a production banking system.**
 
-**Phase 6 — Database-backed API testing completed**
+## Current Status
 
-Implemented:
-- ASP.NET Core Web API
-- SQL Server account persistence using Entity Framework Core
-- Database schema managed through EF Core migrations
-- Account creation and retrieval endpoints
-- 12 automated API regression tests
-- Data-driven and boundary-value tests
-- GitHub Actions CI/CD integration
-- Automated SQL Server container setup in CI
-- TRX test result generation and artifact upload
-- Git-based feature development and pull request workflow
+**Completed through Phase 6 — SQL Server-backed account testing**
 
-Planned:
-- Account-to-account transfer API
-- Transaction rollback verification
-- Insufficient-funds testing
-- Idempotency testing
-- Concurrent transaction testing
-- Direct database assertions
-- Authentication and authorization testing
+| Area | Status | Details |
+| --- | --- | --- |
+| Account creation API | Implemented | `POST /api/accounts` |
+| Account retrieval API | Implemented | `GET /api/accounts/{id}` |
+| Account persistence | Implemented | SQL Server via EF Core |
+| Database schema | Implemented | Accounts and Transfers tables via migrations |
+| API automation | Implemented | 12 NUnit / RestSharp test cases |
+| Continuous integration | Implemented | GitHub Actions with isolated SQL Server |
+| Test evidence | Implemented | Console results and downloadable TRX artifacts |
+| Money transfer endpoints | **Planned** | Phase 7 |
+| Concurrency, rollback, and idempotency tests | **Planned** | Phase 7 |
+| Authentication / authorization tests | **Planned** | Not implemented |
+
+The **Transfers** table and `BankTransaction` model exist as database foundations; **the money-transfer business logic and endpoints are not implemented yet**.
 
 ## Technology Stack
 
-| Category | Technology |
-|---|---|
-| Programming Language | C# |
-| Framework | .NET 10, ASP.NET Core Web API |
-| Test Framework | NUnit |
-| HTTP Automation | RestSharp |
+| Layer | Tools and technologies |
+| --- | --- |
+| Programming | C#, .NET 10 |
+| System under test | ASP.NET Core Web API |
+| Automated tests | NUnit, RestSharp |
+| Data access | Entity Framework Core |
 | Database | Microsoft SQL Server |
-| ORM | Entity Framework Core |
-| Database Schema | EF Core Migrations |
+| Schema management | EF Core migrations (`dotnet-ef` 10.x) |
 | CI/CD | GitHub Actions |
-| Test Reporting | TRX |
-| Version Control | Git, GitHub |
-| Development Tools | Visual Studio Code, Postman |
+| Test reports | TRX / GitHub Actions artifacts |
+| Version control | Git and GitHub |
+| API exploration | Postman |
 
-## Test Framework Architecture
-
-The project separates the application under test from the automated test suite.
+## Architecture
 
 ```text
-NUnit Automated Tests
-        |
-        v
-RestSharp HTTP Client
-        |
-        v
-ASP.NET Core Web API
-        |
-        v
-Entity Framework Core
-        |
-        v
-SQL Server Database
+NUnit tests (BankGuard.ApiTests)
+            |
+            | RestSharp HTTP requests
+            v
+ASP.NET Core API (BankGuard.Api)
+            |
+            | Dependency injection
+            v
+       EF Core DbContext
+            |
+            v
+      SQL Server database
+      (BankGuardQaDev locally)
 ```
 
-The NUnit tests send HTTP requests to the running API and verify response codes and response data.
+Tests run against a **real HTTP endpoint** rather than calling controller methods directly. In GitHub Actions, the workflow starts a temporary SQL Server container, applies the EF Core migrations, launches the API, runs the test suite, and uploads the results.
 
-The API persists account data to SQL Server.
-
-During GitHub Actions execution, a temporary SQL Server environment is created and database migrations are applied before the automated tests run.
-
-## Project Structure
+## Repository Structure
 
 ```text
 BankGuard-QA/
-|
-|-- .github/
-|   |-- workflows/
-|       |-- api-tests.yml
-|
-|-- docs/
-|   |-- TestPlan.md
-|   |-- TransferRequirements.md
-|
-|-- src/
-|   |-- BankGuard.Api/
-|       |-- Controllers/
-|       |-- Data/
-|       |-- Models/
-|       |-- Program.cs
-|       |-- BankGuard.Api.csproj
-|
-|-- tests/
-|   |-- BankGuard.ApiTests/
-|       |-- AccountsApiTests.cs
-|       |-- BankGuard.ApiTests.csproj
-|
-|-- .gitignore
-|-- dotnet-tools.json
-|-- BankGuardQA.slnx
-|-- README.md
+├── .config/
+│   └── dotnet-tools.json             # Local EF Core CLI tool manifest
+├── .github/
+│   └── workflows/
+│       └── api-tests.yml             # Automated CI workflow
+├── docs/
+│   ├── TestPlan.md                   # Existing test scenarios and scope
+│   └── TransferRequirements.md       # Proposed Phase 7 requirements
+├── src/
+│   └── BankGuard.Api/
+│       ├── Controllers/
+│       │   └── AccountsController.cs
+│       ├── Data/
+│       │   ├── BankGuardDbContext.cs
+│       │   └── Migrations/
+│       ├── Models/
+│       │   ├── BankAccount.cs
+│       │   └── BankTransaction.cs
+│       ├── Program.cs
+│       └── BankGuard.Api.csproj
+├── tests/
+│   └── BankGuard.ApiTests/
+│       ├── AccountsApiTests.cs
+│       └── BankGuard.ApiTests.csproj
+├── .gitignore
+├── BankGuardQA.slnx
+└── README.md
 ```
+
+Generated `bin/`, `obj/`, and `TestResults/` content is excluded from Git tracking.
 
 ## Implemented API Endpoints
 
-### Create Bank Account
+### Create an Account
 
-**POST** `/api/accounts`
+`POST /api/accounts`
 
-Example request:
+**Request**
 
 ```json
 {
@@ -129,70 +122,74 @@ Example request:
 }
 ```
 
-Expected successful response: `201 Created`
+**Expected success:** `201 Created`
 
-Example response structure:
+**Example response** (the UUID is illustrative):
 
 ```json
 {
-  "id": "GENERATED_ACCOUNT_GUID",
+  "id": "9ed45171-45b4-40fd-8a44-dcf9ee16b204",
   "ownerName": "Test Customer",
   "balance": 1000.00
 }
 ```
 
-The account ID is generated by the application.
+Current validation includes nonempty owner names, a maximum of 100 characters, nonnegative balances, and balance precision limits.
 
-### Retrieve Bank Account
+### Retrieve an Account
 
-**GET** `/api/accounts/{id}`
+`GET /api/accounts/{id}`
 
-Expected responses:
+| Condition | Expected response |
+| --- | --- |
+| Account exists | `200 OK` and account data |
+| Account does not exist | `404 Not Found` |
 
-- `200 OK` when the account exists
-- `404 Not Found` when the account is not found
+The account records are retrieved from SQL Server using Entity Framework Core.
 
-## Automated Test Coverage
+## Automated Regression Tests
 
-The current NUnit regression suite contains 12 test cases.
+The current suite has **12 NUnit test cases**:
 
-| Test ID | Test Scenario | Expected |
-|---|---|---|
-| TC-001 | Create account with valid data | 201 |
-| TC-002 | Retrieve existing account | 200 |
-| TC-003 | Retrieve nonexistent account | 404 |
-| TC-004 | Negative initial balance: -1 | 400 |
-| TC-005 | Negative initial balance: -100 | 400 |
-| TC-006 | Negative initial balance: -5000 | 400 |
-| TC-007 | Initial balance: 0 | 201 |
-| TC-008 | Initial balance: 0.01 | 201 |
-| TC-009 | Empty customer name | 400 |
-| TC-010 | Whitespace-only customer name | 400 |
-| TC-011 | Customer name with 100 characters | 201 |
-| TC-012 | Customer name with 101 characters | 400 |
+| ID | Scenario | Expected result |
+| --- | --- | --- |
+| TC-001 | Create account with valid data | `201` |
+| TC-002 | Retrieve account created by the test | `200` |
+| TC-003 | Retrieve a nonexistent account | `404` |
+| TC-004 | Initial balance `-1` | `400` |
+| TC-005 | Initial balance `-100` | `400` |
+| TC-006 | Initial balance `-5000` | `400` |
+| TC-007 | Initial balance `0` | `201` |
+| TC-008 | Initial balance `0.01` | `201` |
+| TC-009 | Empty owner name | `400` |
+| TC-010 | Whitespace-only owner name | `400` |
+| TC-011 | Owner name length `100` | `201` |
+| TC-012 | Owner name length `101` | `400` |
 
-### Testing Techniques
+**Testing practices demonstrated:**
 
-- Functional Testing
-- API Testing
-- Negative Testing
-- Boundary Value Analysis
-- Data-Driven Testing
-- Regression Testing
-- HTTP Response Validation
-- Database-Backed Integration Testing
+- Positive and negative testing
+- Boundary-value analysis and parameterized `[TestCase]` tests
+- HTTP response status and JSON payload assertions
+- Reusable RestSharp client setup
+- Unique test account names to avoid inter-test dependence
+- Regression execution through CI
 
-Tests use reusable HTTP client configuration, parameterized NUnit test cases, and assertions for expected API behavior.
+> **Scope note:** The current suite validates database-backed behavior through the API. It does **not** yet include independent SQL assertions, automated restart-persistence checks, or transaction/concurrency tests.
 
-## Local Development Setup
+See [docs/TestPlan.md](docs/TestPlan.md) for the test plan.
+
+## Run Locally (Windows / PowerShell)
 
 ### Prerequisites
 
 - .NET 10 SDK
-- Microsoft SQL Server
+- A reachable Microsoft SQL Server instance
+- Permission to create or modify the dedicated development database
 - Git
-- Visual Studio Code or Visual Studio
-- A local SQL Server account with database permissions
+- Postman (optional)
+
+These instructions assume your local SQL Server is reachable at `localhost` using Windows Authentication. Change the connection string if your SQL Server instance is different.
 
 ### 1. Clone the Repository
 
@@ -201,180 +198,147 @@ git clone https://github.com/Yashaswini944/BankGuard-QA.git
 cd BankGuard-QA
 ```
 
-### 2. Restore Dependencies
+### 2. Restore and Build
 
 ```powershell
 dotnet restore BankGuardQA.slnx
+dotnet build BankGuardQA.slnx
 ```
 
-### 3. Configure SQL Server
+### 3. Create the Development Database
 
-Create a development database named:
-
-`BankGuardQaDev`
-
-Use .NET User Secrets to configure the connection string rather than committing database credentials.
-
-Example for a trusted local SQL Server instance using Windows Authentication:
+If `sqlcmd` is installed and your Windows account has permission, run:
 
 ```powershell
+sqlcmd -S localhost -E -C -Q "IF DB_ID('BankGuardQaDev') IS NULL CREATE DATABASE BankGuardQaDev;"
+```
+
+`-C` trusts the SQL Server certificate and is used here **only for a trusted local development server**. Do not use certificate-trust bypasses as a production security configuration.
+
+### 4. Configure the Connection String Using .NET User Secrets
+
+```powershell
+dotnet user-secrets init --project .\src\BankGuard.Api\BankGuard.Api.csproj
 dotnet user-secrets set "ConnectionStrings:BankGuardDb" "Server=localhost;Database=BankGuardQaDev;Trusted_Connection=True;Encrypt=True;TrustServerCertificate=True" --project .\src\BankGuard.Api\BankGuard.Api.csproj
 ```
 
-Certificate trust bypass is intended only for local development.
+If User Secrets have already been initialized, skip `init` and keep the existing identifier. User Secrets are a **development-only configuration mechanism**; do not commit passwords or production secrets.
 
-### 4. Apply Database Migrations
+### 5. Restore EF Core CLI and Apply Migrations
 
-Use a compatible EF Core 10 migration tool.
+The local tool manifest is stored at **`.config/dotnet-tools.json`**.
 
-Restore the project tool manifest:
+From the repository root:
 
 ```powershell
-dotnet tool restore --tool-manifest .\dotnet-tools.json
+dotnet tool restore
+dotnet tool run dotnet-ef --version
 ```
 
-Then apply migrations:
+Then update the database:
 
 ```powershell
 dotnet tool run dotnet-ef database update --project .\src\BankGuard.Api\BankGuard.Api.csproj --startup-project .\src\BankGuard.Api\BankGuard.Api.csproj
 ```
 
-### 5. Build the Solution
+This applies the checked-in migrations. It should create the database tables including `Accounts`, `Transfers`, and `__EFMigrationsHistory` if they do not already exist.
 
-```powershell
-dotnet build BankGuardQA.slnx
-```
-
-### 6. Start the API
-
-Set the local Development environment:
+### 6. Start the API — Terminal 1
 
 ```powershell
 $env:ASPNETCORE_ENVIRONMENT="Development"
 $env:DOTNET_ENVIRONMENT="Development"
-```
-
-Start the API:
-
-```powershell
 dotnet run --project .\src\BankGuard.Api\BankGuard.Api.csproj --no-launch-profile -- --urls http://localhost:5105
 ```
 
-Local API address:
+Keep this terminal running. The expected address is **`http://localhost:5105`**.
 
-`http://localhost:5105`
+### 7. Run Tests — Terminal 2
 
-Keep this terminal running during testing.
-
-### 7. Execute Automated Tests
-
-Open a second terminal.
-
-Run:
+Open a separate terminal at the repository root:
 
 ```powershell
-dotnet test .\tests\BankGuard.ApiTests\BankGuard.ApiTests.csproj
+dotnet test .\tests\BankGuard.ApiTests\BankGuard.ApiTests.csproj --logger "console;verbosity=normal"
 ```
 
-To generate a TRX report:
+To generate a TRX test report:
 
 ```powershell
 dotnet test .\tests\BankGuard.ApiTests\BankGuard.ApiTests.csproj --logger "trx;LogFileName=BankGuard-Results.trx"
 ```
 
-The test execution requires the API and its SQL Server database to be available.
+The API must be running, with SQL Server accessible, while the tests execute. Tests target `http://localhost:5105` by default; use the `BANKGUARD_API_BASE_URL` environment variable to override the URL.
 
-## CI/CD — GitHub Actions
+### 8. Optional Database Verification
 
-The project includes an automated workflow located at:
+```powershell
+sqlcmd -S localhost -E -C -d BankGuardQaDev -Q "SELECT TOP (10) Id, OwnerName, Balance FROM dbo.Accounts ORDER BY CreatedAtUtc DESC;"
+```
 
-`.github/workflows/api-tests.yml`
+This query is read-only. The tests create fictional accounts, so repeated test runs can add records to your local development database.
+
+## Continuous Integration — GitHub Actions
+
+Workflow: [`.github/workflows/api-tests.yml`](.github/workflows/api-tests.yml)
 
 The workflow:
 
-1. Checks out the repository.
-2. Sets up .NET 10.
-3. Restores NuGet dependencies.
-4. Builds the solution.
-5. Starts a temporary SQL Server container.
-6. Waits for SQL Server readiness.
-7. Applies Entity Framework Core migrations.
-8. Starts the banking API.
-9. Executes NUnit regression tests.
-10. Uploads test result artifacts.
+1. Checks out the repository and configures .NET 10.
+2. Restores dependencies and builds the solution.
+3. Starts an isolated SQL Server container with temporary CI-only credentials.
+4. Waits for SQL Server readiness.
+5. Applies EF Core migrations to a CI database.
+6. Starts BankGuard API and checks that it responds.
+7. Runs NUnit regression tests via RestSharp.
+8. Uploads TRX test reports as GitHub Actions artifacts.
 
-### Verified Regression Results
+The SQL Server used in CI is **separate from the developer's local database**.
 
-The existing regression suite has successfully executed with:
+### Confirmed Regression Evidence
 
-- Total tests: 12
-- Passed: 12
-- Failed: 0
-- Skipped: 0
+The 12-test regression suite was reported passing during local development and in the SQL Server-enabled GitHub Actions workflow:
 
-Results can be reviewed through GitHub Actions workflow logs and downloaded TRX artifacts.
+```text
+Total tests: 12
+Passed: 12
+Failed: 0
+Skipped: 0
+```
 
-[View GitHub Actions](https://github.com/Yashaswini944/BankGuard-QA/actions)
+Review the latest run and its downloadable test artifact on the [Actions page](https://github.com/Yashaswini944/BankGuard-QA/actions). These results cover the implemented account scenarios, **not the planned transfer features**.
 
-## Test Documentation
+## QA Documentation
 
-- [API Test Plan](docs/TestPlan.md)
-- [Banking Transfer Requirements](docs/TransferRequirements.md)
-
-The transfer requirements describe the functionality planned for the next development phase.
+- [API Test Plan](docs/TestPlan.md): coverage, cases, and testing limitations.
+- [Banking Transfer Requirements](docs/TransferRequirements.md): business requirements and acceptance criteria for Phase 7.
 
 ## Known Limitations
 
-- Account creation and retrieval are implemented; transfers are not yet implemented.
-- Automated tests primarily validate API responses rather than querying the database independently.
-- Account persistence has been verified manually across API restarts, but an automated restart-persistence test is not yet included.
-- Authentication and authorization are not implemented for the account endpoints.
-- The API is a development simulation and is not suitable for real banking use.
-- Performance, concurrent transfer, rollback, and idempotency testing remain future work.
+- There are only two implemented account API endpoints; money transfer endpoints are planned.
+- Independent database assertions have not been automated.
+- Persistence across API restarts has not been automated as a test case.
+- Authentication, authorization, account ownership controls, and auditing are not implemented.
+- The API is a development simulation; it must **not** be used with real banking accounts or personal financial data.
+- Concurrency, rollback, performance, security, and idempotency testing are planned rather than completed.
 
-## Development Roadmap
+## Roadmap
 
-### Completed
+**Phase 7 — Transaction and reliability test automation**
 
-- Project setup
-- ASP.NET Core API
-- NUnit and RestSharp framework
-- Positive and negative API tests
-- Boundary-value testing
-- SQL Server and EF Core integration
-- GitHub Actions CI/CD
-- Automated regression test reporting
+- Implement account-to-account transfers using transactional database operations.
+- Test insufficient funds, invalid amounts, missing accounts, and same-account transfers.
+- Implement and test idempotency keys for duplicate transfer requests.
+- Verify database rollback on simulated failures.
+- Add concurrency tests and protect against inconsistent balances.
+- Add direct database verification and extend CI reporting.
 
-### Next Phase
+A feature will be marked **implemented** only after the relevant code, reproducible tests, and CI checks are complete.
 
-- Implement transfer requirements
-- Develop transfer API test cases
-- Verify transactional consistency
-- Test insufficient funds and invalid requests
-- Validate duplicate-request handling
-- Add concurrency and rollback tests
-- Expand database-level verification
+## Why This Project Matters
 
-## Skills Demonstrated
-
-This project provides hands-on experience with:
-
-- C# Test Automation
-- REST API Testing
-- NUnit
-- RestSharp
-- Data-Driven Testing
-- Boundary Value Analysis
-- Defect Investigation
-- Entity Framework Core
-- SQL Server Integration
-- Continuous Integration
-- GitHub Actions
-- Regression Test Design
-- Technical Documentation
+BankGuard QA demonstrates the ability to create and maintain an API testing framework, validate expected and invalid user input, integrate a test environment with a relational database, and run repeatable regression tests through CI/CD. It is designed as portfolio evidence for **Junior QA Automation Engineer, API Test Engineer, Software Test Engineer, and entry-level SDET** roles.
 
 ## Author
 
-GitHub: [Yashaswini944](https://github.com/Yashaswini944)
-
-**Project:** BankGuard QA — Banking API Automation Testing Framework
+**Yashaswini Halepalya Ravikumar**  
+[GitHub: Yashaswini944](https://github.com/Yashaswini944)
