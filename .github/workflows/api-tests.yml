@@ -3,14 +3,17 @@ name: BankGuard API Automation Tests
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+      - 'feature/**'
   pull_request:
-    branches: [main]
+    branches:
+      - main
   workflow_dispatch:
 
 jobs:
   api-tests:
-    name: Build and Run NUnit API Tests
+    name: SQL Server Integration and API Tests
     runs-on: ubuntu-latest
 
     steps:
@@ -26,10 +29,86 @@ jobs:
         run: dotnet restore BankGuardQA.slnx
 
       - name: Build solution
-        run: dotnet build BankGuardQA.slnx --configuration Release --no-restore
+        run: |
+          dotnet build BankGuardQA.slnx \
+            --configuration Release \
+            --no-restore
 
-      - name: Start API and run automated tests
+      - name: Start SQL Server
         shell: bash
+        run: |
+          set -euo pipefail
+
+          # Generate a temporary CI-only password
+          password="$(openssl rand -hex 20)Aa1!"
+
+          echo "::add-mask::$password"
+
+          echo "BANKGUARD_CI_PASSWORD=$password" >> "$GITHUB_ENV"
+
+          echo "ConnectionStrings__BankGuardDb=Server=127.0.0.1,1433;Database=BankGuardQaCi;User Id=sa;Password=$password;Encrypt=True;TrustServerCertificate=True" >> "$GITHUB_ENV"
+
+          docker run -d \
+            --name bankguard-sql \
+            -e ACCEPT_EULA=Y \
+            -e MSSQL_PID=Developer \
+            -e "MSSQL_SA_PASSWORD=$password" \
+            -p 127.0.0.1:1433:1433 \
+            mcr.microsoft.com/mssql/server:2022-latest
+
+      - name: Wait for SQL Server readiness
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          ready=false
+
+          for attempt in {1..60}; do
+            if docker exec bankguard-sql \
+              /opt/mssql-tools18/bin/sqlcmd \
+              -S localhost \
+              -U sa \
+              -P "$BANKGUARD_CI_PASSWORD" \
+              -C \
+              -Q "SELECT 1" \
+              -b > /dev/null 2>&1; then
+
+              ready=true
+              break
+            fi
+
+            sleep 2
+          done
+
+          if [[ "$ready" != "true" ]]; then
+            echo "SQL Server did not become ready."
+            docker logs bankguard-sql
+            exit 1
+          fi
+
+          echo "SQL Server is ready."
+
+      - name: Install EF Core migration tool
+        shell: bash
+        run: |
+          dotnet tool install dotnet-ef \
+            --tool-path ./.ci-tools \
+            --version '10.*'
+
+      - name: Apply database migrations
+        shell: bash
+        run: |
+          ./.ci-tools/dotnet-ef database update \
+            --project src/BankGuard.Api/BankGuard.Api.csproj \
+            --startup-project src/BankGuard.Api/BankGuard.Api.csproj \
+            --configuration Release
+
+      - name: Start API and run NUnit tests
+        shell: bash
+        env:
+          ASPNETCORE_ENVIRONMENT: Development
+          DOTNET_ENVIRONMENT: Development
+          BANKGUARD_API_BASE_URL: http://127.0.0.1:5105
         run: |
           set -euo pipefail
 
@@ -42,6 +121,7 @@ jobs:
             > bankguard-api.log 2>&1 &
 
           api_pid=$!
+
           trap 'kill "$api_pid" 2>/dev/null || true' EXIT
 
           echo "Checking API readiness..."
@@ -64,14 +144,13 @@ jobs:
           done
 
           if [[ "$ready" != "true" ]]; then
-            echo "API failed to start."
+            echo "BankGuard API failed to start."
             cat bankguard-api.log
             exit 1
           fi
 
-          echo "API is ready. Running NUnit tests..."
+          echo "API ready. Running tests..."
 
-          BANKGUARD_API_BASE_URL=http://127.0.0.1:5105 \
           dotnet test \
             tests/BankGuard.ApiTests/BankGuard.ApiTests.csproj \
             --configuration Release \
